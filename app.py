@@ -110,6 +110,9 @@ if uploaded_file:
     else:
         df = pd.read_csv(uploaded_file)
 
+    # Strip column names to remove leading/trailing spaces
+    df.columns = df.columns.str.strip()
+
     # Map sample DD columns
     df = df.rename(columns={
         'Transaction date': 'Date',
