@@ -110,16 +110,17 @@ if uploaded_file:
     else:
         df = pd.read_csv(uploaded_file)
 
-    # Choose currency column
-    st.sidebar.header("Options")
-    currency_column = st.sidebar.selectbox("Select Amount Currency", options=['Amount (USD)', 'Amount (ZWG)'])
-
-    # Map columns
+    # Map sample DD columns
     df = df.rename(columns={
-        'Transaction date':'Date',
-        'Transaction description':'Payer',
-        currency_column:'Amount'
+        'Transaction date': 'Date',
+        'Transaction description': 'Payer'
     })
+
+    # Let user select which currency to analyze
+    currency_column = st.sidebar.selectbox("Select Amount Currency", options=['Amount (USD)', 'Amount (ZWG)'])
+    df['Amount'] = df[currency_column]
+
+    # Optional: keep Receipt Number
     if 'Receipt Number' in df.columns:
         df['Receipt Number'] = df['Receipt Number']
 
