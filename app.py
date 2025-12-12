@@ -210,8 +210,8 @@ if uploaded_file:
             comparison.to_excel(writer, sheet_name="Month Comparison", index=False)
         medical_trend.to_excel(writer, sheet_name="Medical Trend", index=False)
         individual_trend.to_excel(writer, sheet_name="Individual Trend", index=False)
-        writer.save()
     output.seek(0)
+
     st.download_button(
         "Download Excel Report",
         data=output,
