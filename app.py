@@ -3,6 +3,7 @@ import pandas as pd
 import io
 import matplotlib.pyplot as plt
 from datetime import datetime
+import re
 
 st.set_page_config(page_title="Direct Deposit Analysis", layout="wide")
 
@@ -119,20 +120,28 @@ if uploaded_file:
         'Transaction description': 'Payer'
     })
 
-    # --- Robust Amount Column Detection ---
+    # --- Fully Robust Amount Column Detection ---
     available_amounts = []
+
+    def normalize_header(s):
+        s = str(s).replace('\xa0',' ').replace('\u200b','').strip().upper()
+        s = re.sub(r'[^A-Z0-9]', '', s)  # remove all non-alphanumerics
+        return s
+
     for col in df.columns:
-        col_str = str(col).replace('\xa0',' ').replace('\u200b','').strip().upper()
-        if 'AMOUNT' in col_str:
-            if 'USD' in col_str or 'ZWL' in col_str or 'ZWG' in col_str:
-                available_amounts.append(col)
+        col_norm = normalize_header(col)
+        if 'AMOUNT' in col_norm and ('USD' in col_norm or 'ZWG' in col_norm or 'ZWL' in col_norm):
+            available_amounts.append(col)
 
     if not available_amounts:
-        st.error("No valid Amount column found. Make sure your file has a column containing 'Amount' with USD or ZWL/ZWG.")
+        st.error(
+            "No valid Amount column found.\n"
+            "Make sure your file has a column containing 'Amount' with USD or ZWL/ZWG."
+        )
         st.stop()
 
     currency_column = st.sidebar.selectbox("Select Amount Currency", options=available_amounts)
-    df['Amount'] = df[currency_column]
+    df['Amount'] = df[currency_column].apply(clean_amount)
 
     # Optional: keep Receipt Number
     if 'Receipt Number' in df.columns:
@@ -146,7 +155,6 @@ if uploaded_file:
 
     # Clean data
     df['Date'] = pd.to_datetime(df['Date'])
-    df['Amount'] = df['Amount'].apply(clean_amount)
     df['PAYER_TYPE'] = df['Payer'].apply(categorize_payer)
 
     # ---------- Filters ----------
