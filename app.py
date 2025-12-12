@@ -105,53 +105,51 @@ uploaded_file = st.file_uploader("Upload Direct Deposit Excel/CSV", type=["xlsx"
 compare_prev_month = st.checkbox("Compare Previous Month vs Current Month", value=True)
 
 if uploaded_file:
+    # --- Read raw file ---
     if uploaded_file.name.endswith('.xlsx'):
-        df = pd.read_excel(uploaded_file)
+        df_raw = pd.read_excel(uploaded_file, header=None)
     else:
-        df = pd.read_csv(uploaded_file)
+        df_raw = pd.read_csv(uploaded_file, header=None)
 
-    # --- Normalize headers ---
-    df.columns = [str(c).replace('\xa0',' ').replace('\u200b','').strip() for c in df.columns]
+    # --- Automatically detect header row containing 'Amount' ---
+    amount_col = None
+    header_row_index = None
+    for i, row in df_raw.iterrows():
+        for j, val in enumerate(row):
+            if val and re.search(r'AMOUNT', str(val), re.IGNORECASE):
+                amount_col = j
+                header_row_index = i
+                break
+        if amount_col is not None:
+            break
 
-    # Rename common columns
-    df = df.rename(columns={
-        'Transaction date': 'Date',
-        'Transaction description': 'Payer'
-    })
-
-    # --- Robust Amount Detection (any column containing 'Amount') ---
-    def find_amount_column(columns):
-        candidates = []
-        for col in columns:
-            norm = re.sub(r'[^A-Z0-9]', '', str(col).upper())  # remove spaces & special chars
-            if 'AMOUNT' in norm:
-                candidates.append(col)
-        return candidates
-
-    amount_cols = find_amount_column(df.columns)
-
-    if not amount_cols:
+    if amount_col is None:
         st.error("No valid Amount column found. Make sure your file has a column containing 'Amount'.")
         st.stop()
 
-    # Let user select if multiple matches
-    if len(amount_cols) > 1:
-        currency_column = st.selectbox("Select Amount Column", amount_cols)
-    else:
-        currency_column = amount_cols[0]
+    # --- Set header row and remove preceding rows ---
+    df_raw.columns = [str(x).strip() if x else f"COL_{i}" for i, x in enumerate(df_raw.iloc[header_row_index])]
+    df = df_raw.iloc[header_row_index+1:].reset_index(drop=True)
 
-    df['Amount'] = df[currency_column].apply(clean_amount)
+    # --- Clean Amount ---
+    df['Amount'] = df.iloc[:, amount_col].apply(lambda x: float(str(x).replace(',','').replace('$','').strip()) if pd.notnull(x) else 0.0)
 
-    # Validate required columns
-    for col in ['Date','Payer','Amount']:
-        if col not in df.columns:
-            st.error(f"Your file must contain at least these columns: Date, Payer, Amount")
-            st.stop()
+    # --- Rename commonly used columns ---
+    possible_date_cols = [c for c in df.columns if re.search(r'DATE|TRANSACTION DATE', str(c), re.IGNORECASE)]
+    possible_payer_cols = [c for c in df.columns if re.search(r'PAYER|DESCRIPTION|TRANSACTION DESCRIPTION', str(c), re.IGNORECASE)]
+    if not possible_date_cols or not possible_payer_cols:
+        st.error("Your file must contain at least a Date column and a Payer/Transaction Description column.")
+        st.stop()
+    df = df.rename(columns={
+        possible_date_cols[0]: 'Date',
+        possible_payer_cols[0]: 'Payer'
+    })
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    df = df.dropna(subset=['Date', 'Payer'])
 
-    df['Date'] = pd.to_datetime(df['Date'])
     df['PAYER_TYPE'] = df['Payer'].apply(categorize_payer)
 
-    # Filters
+    # ---------- Filters ----------
     st.sidebar.header("Filters")
     medical_aid_options = ['All'] + sorted([aid for aid in MEDICAL_AIDS_DYNAMIC])
     selected_aids = st.sidebar.multiselect("Select Medical Aids to Include", options=medical_aid_options, default=['All'])
@@ -164,7 +162,7 @@ if uploaded_file:
         df_filtered = df_filtered[df_filtered['Payer'].str.upper().isin([a.upper() for a in selected_aids])]
     df_filtered = df_filtered[(df_filtered['Date'] >= pd.to_datetime(start_date)) & (df_filtered['Date'] <= pd.to_datetime(end_date))]
 
-    # Overall summary
+    # ---------- Overall summary ----------
     total_payments = df_filtered['Amount'].sum()
     total_medical = df_filtered[df_filtered['PAYER_TYPE']=='Medical Aid']['Amount'].sum()
     total_individual = df_filtered[df_filtered['PAYER_TYPE']=='Individual']['Amount'].sum()
@@ -173,17 +171,16 @@ if uploaded_file:
     st.write(f"Total Medical Aid Payments: {total_medical:,.2f}")
     st.write(f"Total Individual Payments: {total_individual:,.2f}")
 
-    # Medical Aid Analysis
+    # ---------- Top Payers ----------
     aid_summary = aggregate_by_aid(df_filtered)
     st.subheader("Top 3 Medical Aids")
     st.dataframe(aid_summary.head(3))
 
-    # Individual Analysis
     individual_summary = aggregate_individuals(df_filtered)
     st.subheader("Top 3 Individual Payers")
     st.dataframe(individual_summary.head(3))
 
-    # Trends
+    # ---------- Trends ----------
     st.subheader("Monthly Payment Trends")
     medical_trend, individual_trend = calculate_trends(df_filtered)
     fig, ax = plt.subplots()
@@ -196,13 +193,13 @@ if uploaded_file:
     ax.legend()
     st.pyplot(fig)
 
-    # Month comparison
+    # ---------- Month comparison ----------
     if compare_prev_month:
         comparison, current_month, previous_month = generate_comparison(df_filtered)
         st.subheader(f"Month-over-Month Comparison: {previous_month} vs {current_month}")
         st.dataframe(comparison[['Payer','Total_Amount_Previous','Total_Amount_Current','Difference','Percent_Change']])
 
-    # Excel Report
+    # ---------- Excel Report ----------
     st.subheader("Download Excel Report")
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -222,6 +219,7 @@ if uploaded_file:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    st.success(f"Detected Amount column: {currency_column}")
+    st.success("Amount column detected and parsed successfully!")
+
 else:
     st.info("Upload a Direct Deposit Excel or CSV file to begin analysis.")
