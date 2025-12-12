@@ -110,8 +110,8 @@ if uploaded_file:
     else:
         df = pd.read_csv(uploaded_file)
 
-    # Strip column names to remove leading/trailing spaces
-    df.columns = df.columns.str.strip()
+    # Normalize column names: remove spaces, non-breaking spaces, invisible characters
+    df.columns = [str(col).replace('\xa0',' ').strip() for col in df.columns]
 
     # Map sample DD columns
     df = df.rename(columns={
@@ -119,8 +119,14 @@ if uploaded_file:
         'Transaction description': 'Payer'
     })
 
-    # Let user select which currency to analyze
-    currency_column = st.sidebar.selectbox("Select Amount Currency", options=['Amount (USD)', 'Amount (ZWG)'])
+    # Only keep existing amount columns
+    available_amounts = [col for col in ['Amount (USD)', 'Amount (ZWG)'] if col in df.columns]
+    if not available_amounts:
+        st.error("No valid Amount column found. Make sure your file has 'Amount (USD)' or 'Amount (ZWG)'.")
+        st.stop()
+
+    # Let user select which currency column
+    currency_column = st.sidebar.selectbox("Select Amount Currency", options=available_amounts)
     df['Amount'] = df[currency_column]
 
     # Optional: keep Receipt Number
