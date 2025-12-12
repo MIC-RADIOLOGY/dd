@@ -110,6 +110,19 @@ if uploaded_file:
     else:
         df = pd.read_csv(uploaded_file)
 
+    # Choose currency column
+    st.sidebar.header("Options")
+    currency_column = st.sidebar.selectbox("Select Amount Currency", options=['Amount (USD)', 'Amount (ZWG)'])
+
+    # Map columns
+    df = df.rename(columns={
+        'Transaction date':'Date',
+        'Transaction description':'Payer',
+        currency_column:'Amount'
+    })
+    if 'Receipt Number' in df.columns:
+        df['Receipt Number'] = df['Receipt Number']
+
     # Validate required columns
     required_cols = ['Date','Payer','Amount']
     if not all(col in df.columns for col in required_cols):
