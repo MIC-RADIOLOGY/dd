@@ -134,7 +134,7 @@ if uploaded_file:
         st.error("No valid Amount column found. Make sure your file has a column containing 'Amount' with USD or ZWL/ZWG.")
         st.stop()
 
-    # If multiple matches, let user select
+    # Let user select if multiple matches
     if len(amount_cols) > 1:
         currency_column = st.selectbox("Select Amount Column", amount_cols)
     else:
@@ -183,10 +183,45 @@ if uploaded_file:
     st.subheader("Top 3 Individual Payers")
     st.dataframe(individual_summary.head(3))
 
-    # Month Comparison
+    # Trends
+    st.subheader("Monthly Payment Trends")
+    medical_trend, individual_trend = calculate_trends(df_filtered)
+    fig, ax = plt.subplots()
+    ax.plot(medical_trend['Period'].astype(str), medical_trend['Amount'], marker='o', label='Medical Aid')
+    ax.plot(individual_trend['Period'].astype(str), individual_trend['Amount'], marker='o', label='Individual')
+    ax.set_ylabel("Total Amount")
+    ax.set_xlabel("Period")
+    ax.set_title("Monthly Payment Trends")
+    plt.xticks(rotation=45)
+    ax.legend()
+    st.pyplot(fig)
+
+    # Month comparison
     if compare_prev_month:
         comparison, current_month, previous_month = generate_comparison(df_filtered)
         st.subheader(f"Month-over-Month Comparison: {previous_month} vs {current_month}")
         st.dataframe(comparison[['Payer','Total_Amount_Previous','Total_Amount_Current','Difference','Percent_Change']])
 
+    # Excel Report
+    st.subheader("Download Excel Report")
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df_filtered.to_excel(writer, sheet_name="Filtered Transactions", index=False)
+        aid_summary.to_excel(writer, sheet_name="Medical Aid Summary", index=False)
+        individual_summary.to_excel(writer, sheet_name="Individual Summary", index=False)
+        if compare_prev_month:
+            comparison.to_excel(writer, sheet_name="Month Comparison", index=False)
+        medical_trend.to_excel(writer, sheet_name="Medical Trend", index=False)
+        individual_trend.to_excel(writer, sheet_name="Individual Trend", index=False)
+        writer.save()
+    output.seek(0)
+    st.download_button(
+        "Download Excel Report",
+        data=output,
+        file_name=f"Direct_Deposit_Report_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
     st.success(f"Detected Amount column: {currency_column}")
+else:
+    st.info("Upload a Direct Deposit Excel or CSV file to begin analysis.")
