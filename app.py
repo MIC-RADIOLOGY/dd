@@ -119,19 +119,19 @@ if uploaded_file:
         'Transaction description': 'Payer'
     })
 
-    # --- Robust Amount Detection ---
+    # --- Robust Amount Detection (any column containing 'Amount') ---
     def find_amount_column(columns):
         candidates = []
         for col in columns:
-            norm = re.sub(r'[^A-Z0-9]', '', str(col).upper())
-            if 'AMOUNT' in norm and ('USD' in norm or 'ZWG' in norm or 'ZWL' in norm):
+            norm = re.sub(r'[^A-Z0-9]', '', str(col).upper())  # remove spaces & special chars
+            if 'AMOUNT' in norm:
                 candidates.append(col)
         return candidates
 
     amount_cols = find_amount_column(df.columns)
 
     if not amount_cols:
-        st.error("No valid Amount column found. Make sure your file has a column containing 'Amount' with USD or ZWL/ZWG.")
+        st.error("No valid Amount column found. Make sure your file has a column containing 'Amount'.")
         st.stop()
 
     # Let user select if multiple matches
