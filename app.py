@@ -110,8 +110,8 @@ if uploaded_file:
     else:
         df = pd.read_csv(uploaded_file)
 
-    # Normalize column names: remove spaces, non-breaking spaces, invisible characters
-    df.columns = [str(col).replace('\xa0',' ').strip() for col in df.columns]
+    # Normalize column names: remove invisible/unusual spaces
+    df.columns = [str(col).replace('\xa0',' ').replace('\u200b','').strip() for col in df.columns]
 
     # Map sample DD columns
     df = df.rename(columns={
@@ -122,15 +122,13 @@ if uploaded_file:
     # --- Robust Amount Column Detection ---
     available_amounts = []
     for col in df.columns:
-        col_upper = str(col).upper().replace('\xa0',' ').strip()
-        if 'AMOUNT' in col_upper:
-            if 'USD' in col_upper:
-                available_amounts.append(col)
-            elif 'ZWG' in col_upper or 'ZWL' in col_upper:
+        col_str = str(col).replace('\xa0',' ').replace('\u200b','').strip().upper()
+        if 'AMOUNT' in col_str:
+            if 'USD' in col_str or 'ZWL' in col_str or 'ZWG' in col_str:
                 available_amounts.append(col)
 
     if not available_amounts:
-        st.error("No valid Amount column found. Make sure your file has a column containing 'Amount' with 'USD' or 'ZWG/ZWL'.")
+        st.error("No valid Amount column found. Make sure your file has a column containing 'Amount' with USD or ZWL/ZWG.")
         st.stop()
 
     currency_column = st.sidebar.selectbox("Select Amount Currency", options=available_amounts)
