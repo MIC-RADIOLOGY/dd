@@ -123,9 +123,14 @@ if uploaded_file:
     # --- Fully Robust Amount Column Detection ---
     available_amounts = []
 
-    def normalize_header(s):
-        s = str(s).replace('\xa0',' ').replace('\u200b','').strip().upper()
-        s = re.sub(r'[^A-Z0-9]', '', s)  # remove all non-alphanumerics
+    def normalize_header(header):
+        """
+        Remove invisible spaces, parentheses, hyphens, and all non-alphanumeric characters.
+        Convert to uppercase for uniform comparison.
+        """
+        s = str(header)
+        s = s.replace('\xa0',' ').replace('\u200b','').strip()  # remove invisible spaces
+        s = re.sub(r'[^A-Z0-9]', '', s.upper())  # remove all non-alphanumeric
         return s
 
     for col in df.columns:
