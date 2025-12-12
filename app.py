@@ -119,13 +119,20 @@ if uploaded_file:
         'Transaction description': 'Payer'
     })
 
-    # Only keep existing amount columns
-    available_amounts = [col for col in ['Amount (USD)', 'Amount (ZWG)'] if col in df.columns]
+    # --- Robust Amount Column Detection ---
+    available_amounts = []
+    for col in df.columns:
+        col_upper = str(col).upper().replace('\xa0',' ').strip()
+        if 'AMOUNT' in col_upper:
+            if 'USD' in col_upper:
+                available_amounts.append(col)
+            elif 'ZWG' in col_upper or 'ZWL' in col_upper:
+                available_amounts.append(col)
+
     if not available_amounts:
-        st.error("No valid Amount column found. Make sure your file has 'Amount (USD)' or 'Amount (ZWG)'.")
+        st.error("No valid Amount column found. Make sure your file has a column containing 'Amount' with 'USD' or 'ZWG/ZWL'.")
         st.stop()
 
-    # Let user select which currency column
     currency_column = st.sidebar.selectbox("Select Amount Currency", options=available_amounts)
     df['Amount'] = df[currency_column]
 
